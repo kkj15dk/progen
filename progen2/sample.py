@@ -142,7 +142,7 @@ def main():
     # (3) load
 
     with print_time('loading parameters'):
-        model = create_model(ckpt=ckpt, fp16=args.fp16).to(device)
+        model = create_model(ckpt=ckpt, fp16=args.fp16).to(device) # type: ignore
 
 
     with print_time('loading tokenizer'):

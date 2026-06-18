@@ -47,7 +47,7 @@ def fixed_pos_embedding(x, seq_dim=1, seq_len=None):
 def rotate_every_two(x):
     x1 = x[:, :, :, ::2]
     x2 = x[:, :, :, 1::2]
-    x = torch.stack((-x2, x1), axis=-1)
+    x = torch.stack((-x2, x1), axis=-1) # type: ignore
     return x.flatten(-2)  # in einsum notation: rearrange(x, '... d j -> ... (d j)')
 
 
@@ -117,7 +117,7 @@ class ProGenAttention(nn.Module):
 
         # compute causal mask from causal mask buffer
         query_length, key_length = query.size(-2), key.size(-2)
-        causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]
+        causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]  # type: ignore[index]
 
         # Keep the attention weights computation in fp32 to avoid overflow issues
         query = query.to(torch.float32)
@@ -126,7 +126,7 @@ class ProGenAttention(nn.Module):
         attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
         attn_weights = attn_weights / self.scale_attn
-        attn_weights = torch.where(causal_mask, attn_weights, self.masked_bias.to(attn_weights.dtype))
+        attn_weights = torch.where(causal_mask, attn_weights, self.masked_bias.to(attn_weights.dtype)) # type: ignore
 
         if attention_mask is not None:
             # Apply the attention mask
@@ -399,7 +399,7 @@ class ProGenModel(ProGenPreTrainedModel):
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
-        device = input_ids.device if input_ids is not None else inputs_embeds.device
+        device = input_ids.device if input_ids is not None else inputs_embeds.device # type: ignore
 
         if token_type_ids is not None:
             token_type_ids = token_type_ids.view(-1, input_shape[-1])
@@ -465,14 +465,14 @@ class ProGenModel(ProGenPreTrainedModel):
                 torch.cuda.set_device(hidden_states.device)
                 # Ensure layer_past is on same device as hidden_states (might not be correct)
                 if layer_past is not None:
-                    layer_past = tuple(past_state.to(hidden_states.device) for past_state in layer_past)
+                    layer_past = tuple(past_state.to(hidden_states.device) for past_state in layer_past) # type: ignore
                 # Ensure that attention_mask is always on the same device as hidden_states
                 if attention_mask is not None:
                     attention_mask = attention_mask.to(hidden_states.device)
                 if isinstance(head_mask, torch.Tensor):
                     head_mask = head_mask.to(hidden_states.device)
             if output_hidden_states:
-                all_hidden_states = all_hidden_states + (hidden_states,)
+                all_hidden_states = all_hidden_states + (hidden_states,) # type: ignore
 
             if getattr(self.config, "gradient_checkpointing", False) and self.training:
 
@@ -516,7 +516,7 @@ class ProGenModel(ProGenPreTrainedModel):
 
             # Model Parallel: If it's the last layer for that device, put things on the next device
             if self.model_parallel:
-                for k, v in self.device_map.items():
+                for k, v in self.device_map.items(): # type: ignore
                     if i == v[-1] and "cuda:" + str(k) != self.last_device:
                         hidden_states = hidden_states.to("cuda:" + str(k + 1))
 
@@ -525,16 +525,16 @@ class ProGenModel(ProGenPreTrainedModel):
         hidden_states = hidden_states.view(*output_shape)
         # Add last hidden state
         if output_hidden_states:
-            all_hidden_states = all_hidden_states + (hidden_states,)
+            all_hidden_states = all_hidden_states + (hidden_states,) # type: ignore
 
         if not return_dict:
             return tuple(v for v in [hidden_states, presents, all_hidden_states, all_self_attentions] if v is not None)
 
         return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
-            past_key_values=presents,
-            hidden_states=all_hidden_states,
-            attentions=all_self_attentions,
+            past_key_values=presents, # type: ignore
+            hidden_states=all_hidden_states, # type: ignore
+            attentions=all_self_attentions, # type: ignore
         )
 
 
@@ -675,7 +675,7 @@ class ProGenForCausalLM(ProGenPreTrainedModel):
         )
 
     @staticmethod
-    def _reorder_cache(past: Tuple[Tuple[torch.Tensor]], beam_idx: torch.Tensor) -> Tuple[Tuple[torch.Tensor]]:
+    def _reorder_cache(past: Tuple[Tuple[torch.Tensor]], beam_idx: torch.Tensor) -> Tuple[Tuple[torch.Tensor, ...], ...]:
         """
         This function is used to re-order the :obj:`past_key_values` cache if
         :meth:`~transformers.PretrainedModel.beam_search` or :meth:`~transformers.PretrainedModel.beam_sample` is
